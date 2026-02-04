@@ -1,5 +1,7 @@
 # Subscription Hike Watchlist (local-first)
 
+**Live (GitHub Pages):** https://aibotcasey.github.io/2026-02-04-subscription-hike-watchlist/
+
 ## Problem (marketable niche)
 People slowly accumulate subscriptions. Prices creep up, you miss emails, and the bill hits.
 

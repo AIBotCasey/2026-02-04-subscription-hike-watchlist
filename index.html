@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Subscription Hike Watchlist</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Subscription Hike Watchlist</h1>
+      <div class="muted">Local-first · stores to CaseyBotKanban SQLite</div>
+    </div>
+    <div class="summary">
+      <div class="tile">
+        <div class="label">Monthly total</div>
+        <div class="value" id="monthlyTotal">—</div>
+      </div>
+      <div class="tile">
+        <div class="label">Annual total</div>
+        <div class="value" id="annualTotal">—</div>
+      </div>
+      <div class="tile">
+        <div class="label">Next 14 days</div>
+        <div class="value" id="next14">—</div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <div class="row between">
+        <h2>Add subscription</h2>
+        <div class="row">
+          <input id="filter" placeholder="Filter…" />
+          <button id="export" type="button">Export JSON</button>
+        </div>
+      </div>
+
+      <form id="form" class="grid">
+        <label>Name
+          <input id="name" required placeholder="e.g. Netflix" />
+        </label>
+        <label>Amount
+          <input id="amount" type="number" step="0.01" min="0" required value="9.99" />
+        </label>
+        <label>Cycle
+          <select id="cycle">
+            <option value="monthly" selected>monthly</option>
+            <option value="yearly">yearly</option>
+          </select>
+        </label>
+        <label>Next charge date
+          <input id="nextCharge" type="date" required />
+        </label>
+        <label>Category
+          <input id="category" placeholder="e.g. Streaming" />
+        </label>
+        <label>Notes
+          <input id="notes" placeholder="(optional)" />
+        </label>
+        <div class="row" style="grid-column: 1 / -1">
+          <button type="submit" class="primary">Add</button>
+          <button type="button" id="clearAll" class="danger">Clear all</button>
+          <span class="muted" id="status"></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="row between">
+        <h2>Subscriptions</h2>
+        <div class="muted" id="count"></div>
+      </div>
+      <div id="list" class="list"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Upcoming charges</h2>
+      <div id="upcoming" class="list"></div>
+    </section>
+  </main>
+
+  <footer class="muted">
+    Tip: when you get a “price increase” email, click Edit and add a hike note. That history is the point.
+  </footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -14,12 +14,12 @@ This app tracks:
 …and shows total monthly/annual spend + upcoming charges.
 
 ## Run
-Open `index.html` via the Kanban Projects page (recommended), or directly:
-- http://127.0.0.1:18793/projects/2026-02-04-subscription-hike-watchlist/index.html
+- **Web:** use the GitHub Pages link above.
+- **Local:** open `index.html` in your browser.
 
-## Storage
-Uses the local Kanban server API and stores data in SQLite:
-- `~/Documents/CaseyBotKanban/caseybot.db`
+## Data storage
+- **GitHub Pages / file-opened:** browser storage (localStorage).
+- **Optional local server mode:** can be wired to a local API for file/DB-backed storage (kept on your machine).
 
 ## Marketability
 **Who buys:** budget-conscious households, freelancers, small teams.

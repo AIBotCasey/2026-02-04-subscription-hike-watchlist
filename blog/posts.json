@@ -1,0 +1,11 @@
+{
+  "posts": [
+    {
+      "date": "2026-02-04",
+      "title": "Launch: Subscription Hike Watchlist",
+      "excerpt": "Track subscription spend, upcoming charges, and price hikes — without needing another SaaS.",
+      "tags": ["launch", "mvp"],
+      "href": "./posts/2026-02-04-launch.html"
+    }
+  ]
+}

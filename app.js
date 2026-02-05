@@ -14,6 +14,9 @@ function fmtMoney(n){
   const x = Number(n||0);
   return x.toLocaleString(undefined,{style:'currency',currency:'USD'});
 }
+function esc(s){
+  return String(s ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
 async function apiGet(){
   const res = await fetch(API,{cache:'no-store'});
@@ -35,12 +38,22 @@ const els = {
   nextCharge: document.querySelector('#nextCharge'),
   category: document.querySelector('#category'),
   notes: document.querySelector('#notes'),
+
   list: document.querySelector('#list'),
   upcoming: document.querySelector('#upcoming'),
+  breakdown: document.querySelector('#breakdown'),
+
   status: document.querySelector('#status'),
   filter: document.querySelector('#filter'),
+  sort: document.querySelector('#sort'),
+  showCanceled: document.querySelector('#showCanceled'),
+
   clearAll: document.querySelector('#clearAll'),
-  export: document.querySelector('#export'),
+  importBtn: document.querySelector('#import'),
+  exportJson: document.querySelector('#exportJson'),
+  exportCsv: document.querySelector('#exportCsv'),
+  jsonFile: document.querySelector('#jsonFile'),
+
   count: document.querySelector('#count'),
   monthlyTotal: document.querySelector('#monthlyTotal'),
   annualTotal: document.querySelector('#annualTotal'),
@@ -61,7 +74,9 @@ function normalize(x){
     category: String(x.category||'').trim(),
     notes: String(x.notes||'').trim(),
     hikes: Array.isArray(x.hikes) ? x.hikes : [],
-    createdAt: x.createdAt || new Date().toISOString()
+    status: (x.status === 'canceled') ? 'canceled' : 'active',
+    createdAt: x.createdAt || new Date().toISOString(),
+    canceledAt: x.canceledAt || null
   };
 }
 
@@ -69,23 +84,69 @@ function computeMonthly(x){
   return x.cycle === 'yearly' ? (x.amount/12) : x.amount;
 }
 
-function render(){
-  const f = (els.filter.value||'').trim().toLowerCase();
-  const filtered = items.filter(x => {
-    if(!f) return true;
-    const blob = `${x.name} ${x.category} ${x.notes}`.toLowerCase();
-    return blob.includes(f);
-  });
+async function persist(){
+  await apiPost(items);
+  els.status.textContent = `Saved · ${new Date().toLocaleTimeString()}`;
+  setTimeout(()=> els.status.textContent='', 1200);
+}
 
-  const monthly = filtered.reduce((sum,x)=> sum+computeMonthly(x), 0);
+function filteredItems(){
+  const f = (els.filter.value||'').trim().toLowerCase();
+  const showCanceled = !!els.showCanceled.checked;
+  let out = items.map(normalize)
+    .filter(x => showCanceled ? true : x.status !== 'canceled')
+    .filter(x => {
+      if(!f) return true;
+      const blob = `${x.name} ${x.category} ${x.notes}`.toLowerCase();
+      return blob.includes(f);
+    });
+
+  const mode = els.sort.value;
+  const cmp = {
+    'name': (a,b)=> a.name.localeCompare(b.name),
+    'next': (a,b)=> (parseDate(a.nextCharge)||0) - (parseDate(b.nextCharge)||0),
+    'monthly': (a,b)=> computeMonthly(b) - computeMonthly(a),
+    'hikes': (a,b)=> (b.hikes.length - a.hikes.length)
+  }[mode] || ((a,b)=> a.name.localeCompare(b.name));
+
+  out.sort(cmp);
+  return out;
+}
+
+function renderSummary(list){
+  const monthly = list.reduce((sum,x)=> sum+computeMonthly(x), 0);
   const annual = monthly*12;
   els.monthlyTotal.textContent = fmtMoney(monthly);
   els.annualTotal.textContent = fmtMoney(annual);
-  els.count.textContent = `${filtered.length} item(s)`;
 
-  // upcoming
   const now = parseDate(todayStr());
-  const upcoming = filtered
+  const within14 = list
+    .map(x => ({...x, d: parseDate(x.nextCharge)}))
+    .filter(x => x.d)
+    .filter(x => {
+      const diff = Math.ceil((x.d - now)/86400000);
+      return diff >= 0 && diff <= 14;
+    });
+
+  els.next14.textContent = within14.length ? `${within14.length} charge(s)` : '0';
+  els.count.textContent = `${list.length} item(s)`;
+}
+
+function renderBreakdown(list){
+  const buckets = new Map();
+  for (const x of list) {
+    const k = (x.category || 'Uncategorized').trim() || 'Uncategorized';
+    buckets.set(k, (buckets.get(k) || 0) + computeMonthly(x));
+  }
+  const rows = [...buckets.entries()].sort((a,b)=> b[1]-a[1]);
+  els.breakdown.innerHTML = rows.length ? rows.map(([k,v])=>{
+    return `<div class="card"><div class="top"><div class="title">${esc(k)}</div><div class="badge">~ ${fmtMoney(v)}/mo</div></div></div>`;
+  }).join('') : `<div class="muted">No data.</div>`;
+}
+
+function renderUpcoming(list){
+  const now = parseDate(todayStr());
+  const upcoming = list
     .map(x => ({...x, d: parseDate(x.nextCharge)}))
     .filter(x => x.d)
     .sort((a,b)=> a.d-b.d);
@@ -94,7 +155,6 @@ function render(){
     const diff = Math.ceil((x.d - now)/86400000);
     return diff >= 0 && diff <= 14;
   });
-  els.next14.textContent = within14.length ? `${within14.length} charge(s)` : '0';
 
   els.upcoming.innerHTML = within14.length ? within14.map(x => {
     const days = Math.ceil((x.d-now)/86400000);
@@ -113,47 +173,46 @@ function render(){
         </div>
       </div>`;
   }).join('') : `<div class="muted">No charges in the next 14 days.</div>`;
-
-  // list
-  els.list.innerHTML = filtered.length ? filtered
-    .slice()
-    .sort((a,b)=> a.name.localeCompare(b.name))
-    .map(x => {
-      const hist = x.hikes.length ? `<span class="badge accent">${x.hikes.length} hike(s)</span>` : '';
-      return `
-        <div class="card" data-id="${esc(x.id)}">
-          <div class="top">
-            <div>
-              <div class="title">${esc(x.name)}</div>
-              <div class="muted">${esc(x.category||'—')} · next ${esc(x.nextCharge)} · ${esc(x.cycle)}</div>
-              ${x.notes ? `<div class="muted" style="margin-top:8px;white-space:pre-wrap">${esc(x.notes)}</div>` : ''}
-            </div>
-            <div style="text-align:right">
-              <div class="badge">${fmtMoney(x.amount)}</div>
-              <div class="muted" style="margin-top:6px">~ ${fmtMoney(computeMonthly(x))}/mo</div>
-            </div>
-          </div>
-          <div class="row" style="margin-top:10px">
-            ${hist}
-            <span class="badge">annual ~ ${fmtMoney(computeMonthly(x)*12)}</span>
-          </div>
-          <div class="actions">
-            <button data-action="edit">Edit</button>
-            <button data-action="add-hike">Add hike</button>
-            <button data-action="delete" class="danger">Delete</button>
-          </div>
-        </div>`;
-    }).join('') : `<div class="muted">No subscriptions yet.</div>`;
 }
 
-function esc(s){
-  return String(s ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function renderList(list){
+  els.list.innerHTML = list.length ? list.map(x => {
+    const hist = x.hikes.length ? `<span class="badge accent">${x.hikes.length} hike(s)</span>` : '';
+    const status = x.status === 'canceled' ? `<span class="badge">canceled</span>` : '';
+    return `
+      <div class="card" data-id="${esc(x.id)}">
+        <div class="top">
+          <div>
+            <div class="title">${esc(x.name)}</div>
+            <div class="muted">${esc(x.category||'—')} · next ${esc(x.nextCharge)} · ${esc(x.cycle)}</div>
+            ${x.notes ? `<div class="muted" style="margin-top:8px;white-space:pre-wrap">${esc(x.notes)}</div>` : ''}
+          </div>
+          <div style="text-align:right">
+            <div class="badge">${fmtMoney(x.amount)}</div>
+            <div class="muted" style="margin-top:6px">~ ${fmtMoney(computeMonthly(x))}/mo</div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          ${hist}
+          ${status}
+          <span class="badge">annual ~ ${fmtMoney(computeMonthly(x)*12)}</span>
+        </div>
+        <div class="actions">
+          <button data-action="edit">Edit</button>
+          <button data-action="add-hike">Add hike</button>
+          ${x.status === 'canceled' ? `<button data-action="undo">Undo cancel</button>` : `<button data-action="cancel">Cancel</button>`}
+          <button data-action="delete" class="danger">Delete</button>
+        </div>
+      </div>`;
+  }).join('') : `<div class="muted">No subscriptions yet.</div>`;
 }
 
-async function persist(){
-  await apiPost(items);
-  els.status.textContent = `Saved · ${new Date().toLocaleTimeString()}`;
-  setTimeout(()=> els.status.textContent='', 1200);
+function render(){
+  const list = filteredItems();
+  renderSummary(list);
+  renderBreakdown(list);
+  renderUpcoming(list);
+  renderList(list);
 }
 
 els.form.addEventListener('submit', async (e)=>{
@@ -166,7 +225,8 @@ els.form.addEventListener('submit', async (e)=>{
     nextCharge: els.nextCharge.value,
     category: els.category.value,
     notes: els.notes.value,
-    hikes: []
+    hikes: [],
+    status: 'active'
   });
   if(!x.name) return;
   items.push(x);
@@ -187,9 +247,26 @@ els.list.addEventListener('click', async (e)=>{
   if(!x) return;
 
   const action = btn.dataset.action;
+
   if(action === 'delete'){
     if(!confirm('Delete?')) return;
     items = items.filter(i => i.id !== id);
+    await persist();
+    render();
+    return;
+  }
+
+  if(action === 'cancel'){
+    x.status = 'canceled';
+    x.canceledAt = new Date().toISOString();
+    await persist();
+    render();
+    return;
+  }
+
+  if(action === 'undo'){
+    x.status = 'active';
+    x.canceledAt = null;
     await persist();
     render();
     return;
@@ -229,15 +306,17 @@ els.list.addEventListener('click', async (e)=>{
 });
 
 els.filter.addEventListener('input', render);
+els.sort.addEventListener('change', render);
+els.showCanceled.addEventListener('change', render);
 
 els.clearAll.addEventListener('click', async ()=>{
-  if(!confirm('Clear all subscriptions?')) return;
+  if(!confirm('Clear all subscriptions (including canceled)?')) return;
   items = [];
   await persist();
   render();
 });
 
-els.export.addEventListener('click', ()=>{
+els.exportJson.addEventListener('click', ()=>{
   const blob = new Blob([JSON.stringify(items,null,2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -246,10 +325,44 @@ els.export.addEventListener('click', ()=>{
   URL.revokeObjectURL(a.href);
 });
 
+els.exportCsv.addEventListener('click', ()=>{
+  const rows = [['name','amount','cycle','nextCharge','category','notes','status','canceledAt','hikesJson']].concat(
+    items.map(x => [x.name, String(x.amount), x.cycle, x.nextCharge, x.category||'', x.notes||'', x.status||'active', x.canceledAt||'', JSON.stringify(x.hikes||[])])
+  );
+  const csv = rows.map(r => r.map(cell => {
+    const s = String(cell ?? '');
+    if (/[\n\r,\"]/g.test(s)) return '"' + s.replace(/\"/g,'""') + '"';
+    return s;
+  }).join(',')).join('\n');
+  const blob = new Blob([csv], { type:'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'subscriptions.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+els.importBtn.addEventListener('click', ()=>{
+  els.jsonFile.value='';
+  els.jsonFile.click();
+});
+
+els.jsonFile.addEventListener('change', async ()=>{
+  const f = els.jsonFile.files && els.jsonFile.files[0];
+  if(!f) return;
+  try {
+    const txt = await f.text();
+    const arr = JSON.parse(txt);
+    if(!Array.isArray(arr)) return;
+    items = items.concat(arr.map(normalize));
+    await persist();
+    render();
+  } catch(_) {}
+});
+
 (async function boot(){
   const json = await apiGet();
   items = Array.isArray(json.items) ? json.items.map(normalize) : [];
-  // persist normalization
   await persist();
   render();
 })().catch(err => {

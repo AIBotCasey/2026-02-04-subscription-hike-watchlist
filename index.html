@@ -11,7 +11,7 @@
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
       <div>
         <h1>Subscription Hike Watchlist</h1>
-        <div class="muted">Local-first</div>
+        <div class="muted">Track spend, renewals, and price hikes.</div>
       </div>
       <div class="row">
         <a class="muted" href="https://aibotcasey.github.io/projects/subscription-hike-watchlist/" target="_blank" rel="noopener noreferrer">Blog</a>
@@ -39,7 +39,20 @@
         <h2>Add subscription</h2>
         <div class="row">
           <input id="filter" placeholder="Filter…" />
-          <button id="export" type="button">Export JSON</button>
+          <select id="sort">
+            <option value="name" selected>Sort: name</option>
+            <option value="next">Sort: next charge</option>
+            <option value="monthly">Sort: monthly cost</option>
+            <option value="hikes">Sort: most hikes</option>
+          </select>
+          <label class="muted" style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" id="showCanceled" />
+            show canceled
+          </label>
+          <button id="import" type="button">Import JSON</button>
+          <button id="exportJson" type="button">Export JSON</button>
+          <button id="exportCsv" type="button">Export CSV</button>
+          <input id="jsonFile" type="file" accept="application/json" style="display:none" />
         </div>
       </div>
 
@@ -60,7 +73,15 @@
           <input id="nextCharge" type="date" required />
         </label>
         <label>Category
-          <input id="category" placeholder="e.g. Streaming" />
+          <input id="category" placeholder="e.g. Streaming" list="catPresets" />
+          <datalist id="catPresets">
+            <option value="Streaming"></option>
+            <option value="Music"></option>
+            <option value="Cloud"></option>
+            <option value="News"></option>
+            <option value="Gaming"></option>
+            <option value="Utilities"></option>
+          </datalist>
         </label>
         <label>Notes
           <input id="notes" placeholder="(optional)" />
@@ -75,20 +96,25 @@
 
     <section class="panel">
       <div class="row between">
-        <h2>Subscriptions</h2>
+        <h2>Category breakdown</h2>
         <div class="muted" id="count"></div>
       </div>
-      <div id="list" class="list"></div>
+      <div id="breakdown" class="list"></div>
     </section>
 
     <section class="panel">
       <h2>Upcoming charges</h2>
       <div id="upcoming" class="list"></div>
     </section>
+
+    <section class="panel">
+      <h2>Subscriptions</h2>
+      <div id="list" class="list"></div>
+    </section>
   </main>
 
   <footer class="muted">
-    Tip: when you get a “price increase” email, click Edit and add a hike note. That history is the point.
+    Tip: use “Cancel” instead of delete so you keep hike history.
   </footer>
 
   <script src="./app.js"></script>
